@@ -1,5 +1,6 @@
 include(":nullable")
 include(":lateinit")
+include(":tailrec")
 rootProject.name = "kotlin"
 
 pluginManagement {
