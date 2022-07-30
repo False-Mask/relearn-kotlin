@@ -134,7 +134,7 @@ public final printCur()V
 
 
 ## 小结
-lateinit的实现比价简单。
+lateinit的实现比较简单。
 - 首先依托于kotlin的属性获取,外部对象访问内部对象是通过使用getter方法获取的,即使你的属性是public,他最后生成的代码也不会贸然调用getfield指令。
 - 在上述的确保下,只要能保证成员内部调用是安全的,外部就自然而然能确保
 - 而确保内部获取属性一定为非空很简单,就是对内部的获取属性的位置进行assert,一旦你获取属性就自行生成一段Intrinsics.throwUninitializedPropertyAccessException这样就确保了值一定非空
