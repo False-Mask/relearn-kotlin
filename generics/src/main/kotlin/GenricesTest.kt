@@ -48,3 +48,30 @@ class D<out Generics : A> {
     }
 }
 
+interface GenericsInterface<A> {
+    fun m(a: A): A
+}
+
+interface GenericsInterface2<in A> {
+    fun m(a: A)
+}
+
+interface GenericsInterface3<out A> {
+    fun m(): A
+}
+
+interface GenericsInterface4<in A : String> {
+    fun m(a: A)
+}
+
+
+inline fun <reified A> reifiedGenerics(a: A) {
+    println(A::class.java)
+}
+
+fun main() {
+    reifiedGenerics<String>("")
+}
+
+
+

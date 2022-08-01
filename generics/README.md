@@ -280,4 +280,26 @@ class D<out Generics : A> {
 ## 接口泛型
 
 
+```kotlin
+interface GenericsInterface<A> {
+    fun m(a: A):A
+}
+```
+
+字节码分析
+
+```
+public abstract interface GenericsInterface {
+  # 依然是类型擦除
+  public abstract m(Ljava/lang/Object;)Ljava/lang/Object;
+}
+```
+
+类似的in/out 类型限定的实现原理和上述实现类似。不做赘述。
+
+
+## reified
+
+
+
 
