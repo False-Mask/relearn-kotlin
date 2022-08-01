@@ -66,6 +66,7 @@ interface GenericsInterface4<in A : String> {
 
 
 inline fun <reified A> reifiedGenerics(a: A) {
+    println(a)
     println(A::class.java)
 }
 

@@ -300,6 +300,65 @@ public abstract interface GenericsInterface {
 
 ## reified
 
+reified是需要借助inline它是泛型,but它的实现是依靠的inline.
+reified = generics + inline
 
 
+```kotlin
+inline fun <reified A> reifiedGenerics(a: A) {
+  println(a)
+  println(A::class.java)
+}
+
+fun main() {
+  reifiedGenerics<String>("")
+}
+```
+
+当你去分析reifiedGenerics来了解reified的实现的时候.
+你就走错路了.
+因为他是inline,而且强制绑定inline
+它的实现你得去调用处进行分析.
+
+```
+public final static main()V
+   L0
+    LINENUMBER 74 L0
+    LDC ""
+    ASTORE 0
+   L1
+    ICONST_0
+    ISTORE 1
+   L2
+    LINENUMBER 80 L2
+   L3
+    GETSTATIC java/lang/System.out : Ljava/io/PrintStream;
+    ALOAD 0
+    INVOKEVIRTUAL java/io/PrintStream.println (Ljava/lang/Object;)V
+   L4
+   L5
+    LINENUMBER 81 L5
+    LDC Ljava/lang/String;.class        #class常量入栈
+    ASTORE 2
+   L6
+    GETSTATIC java/lang/System.out : Ljava/io/PrintStream;
+    ALOAD 2
+    INVOKEVIRTUAL java/io/PrintStream.println (Ljava/lang/Object;)V
+   L7
+   L8
+    LINENUMBER 82 L8
+    NOP
+   L9
+    LINENUMBER 75 L9
+    RETURN
+```
+
+代码等价于
+
+```kotlin
+fun main(){
+    println("")
+    println(String::class.java)
+}
+```
 
