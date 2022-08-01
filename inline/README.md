@@ -66,6 +66,11 @@ public final static testInline()V
 
 关于crossline和noinline加强内联,一个减弱内联.可自行分析.
 
+最后还需要说明内联只针对于kotlin,对于javac可是不认inline的
+(因为内联的实现也就是通过kotlinc进行代码内联)
+![img.png](img/img.png)
+
+
 # 开胃菜
 
 suspendCoroutineUninterceptedOrReturn在协程中频繁用到.
