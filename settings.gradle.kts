@@ -3,6 +3,7 @@ include(":lateinit")
 include(":tailrec")
 include(":generics")
 include(":inline")
+include(":function")
 rootProject.name = "kotlin"
 
 pluginManagement {
