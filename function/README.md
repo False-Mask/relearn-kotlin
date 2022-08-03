@@ -212,17 +212,17 @@ public final class LocalFunctionKt {
 
 ```java
 public final class LocalFunctionKt {
-   public static final void main() {
-      main$localFunction();
-   }
+    public static final void main() {
+        main$localFunction();
+    }
 
-   public static void main(String[] args) {
-      main();
-   }
+    public static void main(String[] args) {
+        main();
+    }
 
-   private static final void main$localFunction() {
-      System.out.println("I am local function");
-   }
+    private static final void main$localFunction() {
+        System.out.println("I am local function");
+    }
 }
 ```
 
