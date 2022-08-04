@@ -147,3 +147,45 @@ fun main() {
 - 生成的匿名类会实现Function接口(也就是高阶函数的接口)
   > 除此之外还会继承一个抽象类,而这个抽象类是kotlin的反射扩展,这边不做解释
 - 而invoke方法会调用我们指定需要指向的函数
+
+# 引用属性
+
+明晰引用函数的实现以后会发现他们的实现是类似的,都是通过生成匿名类的方式实现,每一个::引用都会生成一个匿名类
+
+```kotlin
+fun main() {
+    val property: KProperty0<String> = ::p
+    println(property)
+}
+
+private val p = ""
+```
+
+```java
+public static final void main(){
+        KProperty0 property=ReferencePropertyKt$main$property$1.INSTANCE;
+        System.out.println(property);
+        }
+
+final class ReferencePropertyKt$main$property$1 extends PropertyReference0Impl {
+    public static final KProperty0 INSTANCE = new ReferencePropertyKt$main$property$1();
+
+    ReferencePropertyKt$main$property$1() {
+        super(ReferencePropertyKt.class, "p", "getP()Ljava/lang/String;", 1);
+    }
+
+    @Nullable
+    public Object get() {
+        return ReferencePropertyKt.access$getP$p();
+    }
+}
+```
+
+他呢只是将property的get函数包装了一层而已别无其他.
+至于这个PropertyReference0Impl也是属于Kotlin reflection的内容在此不做赘述.
+
+## 总结
+
+- Kotlin的::操作符用于引用property和高阶函数
+- 原理是通过生成匿名类,匿名类调用相应property的get或者调用指定的function
+- Kotlin ::操作符和Kotlin的反射密切相连(Kotlin反射并不是自己实现的一套新的反射机制,只是对反射的增强)
