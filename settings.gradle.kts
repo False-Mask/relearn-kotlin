@@ -5,6 +5,7 @@ include(":generics")
 include(":inline")
 include(":function")
 include(":callable-reference-operator")
+include(":reflection")
 rootProject.name = "kotlin"
 
 pluginManagement {
