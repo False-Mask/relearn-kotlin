@@ -209,8 +209,6 @@ internal fun <T : Any> getOrCreateKotlinClass(jClass: Class<T>): KClassImpl<T> {
 ![img_4.png](img_4.png)
 再一眼发现突破口再data.descriptor
 
-
-
 ```kotlin
 val data = ReflectProperties.lazy { Data() }
 ```
@@ -275,8 +273,6 @@ public static abstract class Val<T> {
     }
 }
 ```
-
-
 
 接着看descriptor
 
@@ -668,10 +664,471 @@ fun main() {
 4. 我们都知道kotlin 在实例化KClassImpl的时候不是直接使用的强引用,而是采用的WeakReference为什么?
 5. kotlin reflection的KClass的缓存会存在并发问题嘛?为什么?
 
-
 答案
+
 1. 没开启kotlin reflection返回时false,反之是true,因为没开启kotlin reflection类的获取是通过直接new,开启以后会放入一个map里面
 2. kotlin reflection做了一些kotlin方面的扩展,比如可以用于判断是否是final,suspend,sealed class,open,data class,......
 3. 并不会,kotlin reflection内容keep住了Metadata,当然你如果给他改了,那确实是在使用增强反射的时候会出大问题
 4. 因为KClassImpl内部有太多的成员了,而且还会被频繁调用,一步留神就调用多了创建了很多实例就会导致内存飙升,如果不做限制oom可能性就大起来了,在这种情况WeakReference更适合做缓存
-5. 显然存在,在设计上为了追求读取性能,资源竞争和数据丢失在设计的时候就没有关注,因为一旦关注就得加锁,无论是乐观锁还是悲观锁在一定程度上都会导致性能低下,而且多线程访问不加锁只会导致数据重复创建和覆盖(在者Metadata是静态数据)所以不加锁也是可以接受的.
+5.
+
+显然存在,在设计上为了追求读取性能,资源竞争和数据丢失在设计的时候就没有关注,因为一旦关注就得加锁,无论是乐观锁还是悲观锁在一定程度上都会导致性能低下,而且多线程访问不加锁只会导致数据重复创建和覆盖(
+在者Metadata是静态数据)所以不加锁也是可以接受的.
+
+## function references
+
+以下内容是kotlin ::操作符的进阶使用
+
+在此之前可以参考[kotlin ::操作符初识](../callable-reference-operator)
+
+```kotlin
+fun main() {
+    val kFunction = ::function
+}
+
+fun function() {
+
+}
+```
+
+在之前我们分析了kotlin ::操作符的实现原理。
+我们知道::function 会创建一个匿名类
+
+![img_5.png](img_5.png)
+
+分析kotlin反射的实现的切入点也只能是FunctionReferenceImpl
+
+```java
+//可以发现所有的构造函数都是调用的父类
+public class FunctionReferenceImpl extends FunctionReference {
+    public FunctionReferenceImpl(int arity, KDeclarationContainer owner, String name, String signature) {
+        super(
+                arity, NO_RECEIVER,
+                ((ClassBasedDeclarationContainer) owner).getJClass(), name, signature,
+                owner instanceof KClass ? 0 : 1
+        );
+    }
+
+    @SinceKotlin(version = "1.4")
+    public FunctionReferenceImpl(int arity, Class owner, String name, String signature, int flags) {
+        super(arity, NO_RECEIVER, owner, name, signature, flags);
+    }
+
+    @SinceKotlin(version = "1.4")
+    public FunctionReferenceImpl(int arity, Object receiver, Class owner, String name, String signature, int flags) {
+        super(arity, receiver, owner, name, signature, flags);
+    }
+}
+```
+
+```java
+//所有构造依然调用的父类
+public class FunctionReference extends CallableReference implements FunctionBase, KFunction {
+    private final int arity;
+
+    /**
+     * Bitmask where bits represent the following flags:<br/>
+     * <li>
+     *     <ul>0 - whether the vararg to element parameter type conversion happened, i.e.<pre>
+     *         fun target(vararg xs: Int) {}
+     *         fun use(f: (Int, Int, Int) -> Unit) {}
+     *         use(::target)
+     *     </pre></ul>
+     *     <ul>1 - whether coercion of return type to Unit happened, i.e.<pre>
+     *         fun target(): Boolean = true
+     *         fun use(f: () -> Unit) {}
+     *         use(::target)
+     *     </pre></ul>
+     *     <ul>2 - whether suspend conversion happened, i.e.,<pre>
+     *         fun target() {}
+     *         fun useSuspend(f: suspend () -> Unit) {}
+     *         useSuspend(::target)
+     *     </pre></ul>
+     * </li>
+     */
+    @SinceKotlin(version = "1.4")
+    private final int flags;
+
+    public FunctionReference(int arity) {
+        this(arity, NO_RECEIVER, null, null, null, 0);
+    }
+
+    @SinceKotlin(version = "1.1")
+    public FunctionReference(int arity, Object receiver) {
+        this(arity, receiver, null, null, null, 0);
+    }
+
+    @SinceKotlin(version = "1.4")
+    public FunctionReference(int arity, Object receiver, Class owner, String name, String signature, int flags) {
+        super(receiver, owner, name, signature, (flags & 1) == 1);
+        this.arity = arity;
+        this.flags = flags >> 1;
+    }
+
+    @Override
+    public int getArity() {
+        return arity;
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    protected KFunction getReflected() {
+        return (KFunction) super.getReflected();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    protected KCallable computeReflected() {
+        return Reflection.function(this);
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isInline() {
+        return getReflected().isInline();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isExternal() {
+        return getReflected().isExternal();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isOperator() {
+        return getReflected().isOperator();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isInfix() {
+        return getReflected().isInfix();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isSuspend() {
+        return getReflected().isSuspend();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) return true;
+        if (obj instanceof FunctionReference) {
+            FunctionReference other = (FunctionReference) obj;
+
+            return getName().equals(other.getName()) &&
+                    getSignature().equals(other.getSignature()) &&
+                    flags == other.flags &&
+                    arity == other.arity &&
+                    Intrinsics.areEqual(getBoundReceiver(), other.getBoundReceiver()) &&
+                    Intrinsics.areEqual(getOwner(), other.getOwner());
+        }
+        if (obj instanceof KFunction) {
+            return obj.equals(compute());
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return ((getOwner() == null ? 0 : getOwner().hashCode() * 31) + getName().hashCode()) * 31 + getSignature().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        KCallable reflected = compute();
+        if (reflected != this) {
+            return reflected.toString();
+        }
+
+        // TODO: consider adding the class name to toString() for constructors
+        return "<init>".equals(getName())
+                ? "constructor" + Reflection.REFLECTION_NOT_AVAILABLE
+                : "function " + getName() + Reflection.REFLECTION_NOT_AVAILABLE;
+    }
+}
+```
+
+```java
+/**
+ * A superclass for all classes generated by Kotlin compiler for callable references. 
+ * All methods from KCallable should be implemented here and should delegate to the actual implementation, loaded dynamically and stored in the reflected field.
+ */
+//简而言之就是具体实现function reflection的类
+@SuppressWarnings({"unchecked", "NullableProblems", "rawtypes"})
+public abstract class CallableReference implements KCallable, Serializable {
+    // This field is not volatile intentionally:
+    // 1) It's fine if the value is computed multiple times in different threads;
+    // 2) An uninitialized value cannot be observed in this field from other thread because only already initialized or safely initialized
+    //    objects are written to it. The latter is guaranteed because both KFunctionImpl and KPropertyImpl have at least one final field.
+    private transient KCallable reflected;
+
+    @SinceKotlin(version = "1.1")
+    protected final Object receiver;
+
+    @SinceKotlin(version = "1.4")
+    private final Class owner;
+
+    @SinceKotlin(version = "1.4")
+    private final String name;
+
+    @SinceKotlin(version = "1.4")
+    private final String signature;
+
+    @SinceKotlin(version = "1.4")
+    private final boolean isTopLevel;
+
+    @SinceKotlin(version = "1.1")
+    public static final Object NO_RECEIVER = NoReceiver.INSTANCE;
+
+    @SinceKotlin(version = "1.2")
+    private static class NoReceiver implements Serializable {
+        private static final NoReceiver INSTANCE = new NoReceiver();
+
+        private Object readResolve() throws ObjectStreamException {
+            return INSTANCE;
+        }
+    }
+
+    public CallableReference() {
+        this(NO_RECEIVER);
+    }
+
+    @SinceKotlin(version = "1.1")
+    protected CallableReference(Object receiver) {
+        this(receiver, null, null, null, false);
+    }
+
+    @SinceKotlin(version = "1.4")
+    protected CallableReference(Object receiver, Class owner, String name, String signature, boolean isTopLevel) {
+        this.receiver = receiver;
+        this.owner = owner;
+        this.name = name;
+        this.signature = signature;
+        this.isTopLevel = isTopLevel;
+    }
+
+    protected abstract KCallable computeReflected();
+
+    @SinceKotlin(version = "1.1")
+    public Object getBoundReceiver() {
+        return receiver;
+    }
+
+    @SinceKotlin(version = "1.1")
+    public KCallable compute() {
+        KCallable result = reflected;
+        if (result == null) {
+            result = computeReflected();
+            reflected = result;
+        }
+        return result;
+    }
+
+    @SinceKotlin(version = "1.1")
+    protected KCallable getReflected() {
+        KCallable result = compute();
+        if (result == this) {
+            throw new KotlinReflectionNotSupportedError();
+        }
+        return result;
+    }
+
+    // The following methods provide the information identifying this callable, which is used by the reflection implementation and
+    // by equals/hashCode/toString. For callable references compiled prior to 1.4, these methods were overridden in each subclass
+    // (each anonymous class generated for a callable reference).
+
+    /**
+     * @return the class or package where the callable should be located, usually specified on the LHS of the '::' operator
+     */
+    public KDeclarationContainer getOwner() {
+        return owner == null ? null :
+                isTopLevel ? Reflection.getOrCreateKotlinPackage(owner) : Reflection.getOrCreateKotlinClass(owner);
+    }
+
+    /**
+     * @return Kotlin name of the callable, the one which was declared in the source code (@JvmName doesn't change it)
+     */
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    /**
+     * @return JVM signature of the callable, e.g. "println(Ljava/lang/Object;)V". If this is a property reference,
+     * returns the JVM signature of its getter, e.g. "getFoo(Ljava/lang/String;)I". If the property has no getter in the bytecode
+     * (e.g. private property in a class), it's still the signature of the imaginary default getter that would be generated otherwise.
+     *
+     * Note that technically the signature itself is not even used as a signature per se in reflection implementation,
+     * but only as a unique and unambiguous way to map a function/property descriptor to a string.
+     */
+    public String getSignature() {
+        return signature;
+    }
+
+    // The following methods are the delegating implementations of reflection functions. They are called when you're using reflection
+    // on a callable reference. Without kotlin-reflect.jar in the classpath, getReflected() throws an exception.
+
+    @Override
+    public List<KParameter> getParameters() {
+        return getReflected().getParameters();
+    }
+
+    @Override
+    public KType getReturnType() {
+        return getReflected().getReturnType();
+    }
+
+    @Override
+    public List<Annotation> getAnnotations() {
+        return getReflected().getAnnotations();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public List<KTypeParameter> getTypeParameters() {
+        return getReflected().getTypeParameters();
+    }
+
+    @Override
+    public Object call(Object... args) {
+        return getReflected().call(args);
+    }
+
+    @Override
+    public Object callBy(Map args) {
+        return getReflected().callBy(args);
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public KVisibility getVisibility() {
+        return getReflected().getVisibility();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isFinal() {
+        return getReflected().isFinal();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isOpen() {
+        return getReflected().isOpen();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.1")
+    public boolean isAbstract() {
+        return getReflected().isAbstract();
+    }
+
+    @Override
+    @SinceKotlin(version = "1.3")
+    public boolean isSuspend() {
+        return getReflected().isSuspend();
+    }
+}
+```
+
+看了上方代码可以发现大多数方法都是调用getReflected()后再调用的.
+所以这边的解析逻辑大概率是在getReflected()里面
+
+```java
+public abstract class CallableReference /* ...... */ {
+    @SinceKotlin(version = "1.1")
+    protected KCallable getReflected() {
+        //解析
+        KCallable result = compute();
+        if (result == this) {
+            throw new KotlinReflectionNotSupportedError();
+        }
+        return result;
+    }
+
+    @SinceKotlin(version = "1.1")
+    public KCallable compute() {
+        //判断是否解析过
+        KCallable result = reflected;
+        //如果没有就解析,并将结果存储起来
+        if (result == null) {
+            result = computeReflected();
+            reflected = result;
+        }
+        //返回
+        return result;
+    }
+}
+```
+
+最最核心的是一个抽象
+
+```java
+protected abstract KCallable computeReflected();
+```
+
+然后就在FunctionReference里面找到了实现
+
+```java
+public class FunctionReference /*...... */ {
+    @Override
+    @SinceKotlin(version = "1.1")
+    protected KCallable computeReflected() {
+        //我们好像在哪见过吧......
+        return Reflection.function(this);
+    }
+}
+```
+
+```java
+public class ReflectionFactoryImpl extends ReflectionFactory {
+    @Override
+    public KFunction function(FunctionReference f) {
+        //不能说和KClass类似,只能说一模一样
+        return new KFunctionImpl(getOwner(f), f.getName(), f.getSignature(), f.getBoundReceiver());
+    }
+
+    private static KDeclarationContainerImpl getOwner(CallableReference reference) {
+        KDeclarationContainer owner = reference.getOwner();
+        return owner instanceof KDeclarationContainerImpl ? ((KDeclarationContainerImpl) owner) : EmptyContainerForLocal.INSTANCE;
+    }
+
+}
+
+```
+
+```java
+//都是用于解析class后续也都能猜到了。
+public KDeclarationContainer getOwner(){
+        return owner==null?null:
+        isTopLevel?Reflection.getOrCreateKotlinPackage(owner):Reflection.getOrCreateKotlinClass(owner);
+        }
+```
+
+类似kClass
+![img_6.png](img_6.png)
+
+```kotlin
+internal class KFunctionImpl private constructor(
+    override val container: KDeclarationContainerImpl,
+    name: String,
+    private val signature: String,
+    descriptorInitialValue: FunctionDescriptor?,
+    private val rawBoundReceiver: Any? = CallableReference.NO_RECEIVER
+) /* ...... */ {
+    override val descriptor: FunctionDescriptor by ReflectProperties.lazySoft(descriptorInitialValue) {
+        container.findFunctionDescriptor(name, signature)
+    }
+}
+
+```
+
+分布和KClassImpl
+![img_8.png](img_8.png)
+
+## 小结
+- function reference最后依然是调用的Reflection的静态方法
+- function reference的实现最后也是通过解析Metadata
