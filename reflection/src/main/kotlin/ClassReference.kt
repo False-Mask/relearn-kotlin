@@ -9,14 +9,9 @@ class Test {}
 fun main() {
 
     val clz = Test::class
-    val z = ::a
     println(clz.isData)
 }
 
-
-fun a(){
-
-}
 
 
 

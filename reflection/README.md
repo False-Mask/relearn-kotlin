@@ -1126,9 +1126,99 @@ internal class KFunctionImpl private constructor(
 
 ```
 
-分布和KClassImpl
+分布和KClassImpl类似
 ![img_8.png](img_8.png)
 
-## 小结
+### 小结
+
 - function reference最后依然是调用的Reflection的静态方法
 - function reference的实现最后也是通过解析Metadata
+
+## property references
+
+```kotlin
+class PropertyReference {
+    var a = 10
+}
+
+fun main() {
+    val receiver = PropertyReference()
+    val propertyReference = receiver::a
+    val a = receiver::a
+}
+```
+
+每一次引用都会生成一个匿名类
+![img_7.png](img_7.png)
+
+```java
+public final class PropertyReferenceKt {
+    public static final void main() {
+        PropertyReference receiver = new PropertyReference();
+        //由于不是顶层属性这里没办法进行单例,所以采用的是直接new的方式
+        new PropertyReferenceKt$main$propertyReference$1(receiver);
+        new PropertyReferenceKt$main$a$1(receiver);
+    }
+}
+```
+
+一样的套路
+![img_9.png](img_9.png)
+
+这里对于var的引用时mutable 对于val就是...
+
+最后根据super调用,一路点到了老熟人
+
+![img_10.png](img_10.png)
+
+这下就熟悉了,点开`computeReflected`看看实现类
+
+```java
+public class MutablePropertyReference0 {
+    //......
+    protected KCallable computeReflected() {
+        return Reflection.mutableProperty0(this);
+    }
+    //.....
+}
+```
+
+```java
+public class ReflectionFactoryImpl {
+    @Override
+    public KMutableProperty0 mutableProperty0(MutablePropertyReference0 p) {
+        return new KMutableProperty0Impl(getOwner(p), p.getName(), p.getSignature(), p.getBoundReceiver());
+    }
+    //......
+}
+```
+
+```kotlin
+internal class KMutableProperty0Impl<V> : KProperty0Impl<V>, KMutableProperty0<V> {
+    constructor(container: KDeclarationContainerImpl, descriptor: PropertyDescriptor) : super(container, descriptor)
+
+    constructor(container: KDeclarationContainerImpl, name: String, signature: String, boundReceiver: Any?) : super(
+        container, name, signature, boundReceiver
+    )
+
+    private val _setter = ReflectProperties.lazy { Setter(this) }
+
+    override val setter: Setter<V> get() = _setter()
+
+    override fun set(value: V) = setter.call(value)
+
+    class Setter<R>(override val property: KMutableProperty0Impl<R>) : KPropertyImpl.Setter<R>(),
+        KMutableProperty0.Setter<R> {
+        override fun invoke(value: R): Unit = property.set(value)
+    }
+}
+```
+
+内容依然时通过descriptor进行解析
+
+![img_11.png](img_11.png)
+
+## 小结
+
+- kotlin reflection是java反射的增强
+- kotlin反射的实现主要是通过生成匿名类,调用Reflection静态方法返回对应的实现,具体实现会去解析class文件的Metadata注解
