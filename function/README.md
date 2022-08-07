@@ -229,3 +229,58 @@ public final class LocalFunctionKt {
 - 所以kotlin的局部函数其实也就是普通的函数
 - 编译以后是同级的
 - 其实现原理也就是通过编译器静态检查从而实现所谓的局部
+
+# SAM接口
+
+SAM即(Single Abstract Method)即单抽象方法接口,属于接口的一种定义方式
+是一种比较方便的语法糖。
+
+```kotlin
+fun interface SAM {
+    fun say(a: String): Unit
+}
+
+fun main() {
+
+    samTest {
+        println(it)
+    }
+
+}
+
+fun samTest(sam: SAM) {
+    sam.say("Hello")
+}
+```
+
+接口是好接口
+
+![img_3.png](img_3.png)
+
+分析一下调用处
+
+```
+public final static main()V
+   L0
+    # 原来是你啊,java lambda表达式
+    INVOKEDYNAMIC say()LSAM; [
+      // handle kind 0x6 : INVOKESTATIC
+      java/lang/invoke/LambdaMetafactory.metafactory(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;
+      // arguments:
+      (Ljava/lang/String;)V, 
+      // handle kind 0x6 : INVOKESTATIC
+      SAMKt.main$lambda-0(Ljava/lang/String;)V, 
+      (Ljava/lang/String;)V
+    ]
+   L1
+    LINENUMBER 13 L1
+    INVOKESTATIC SAMKt.samTest (LSAM;)V
+   L2
+    LINENUMBER 17 L2
+    RETURN
+   L3
+    MAXSTACK = 1
+    MAXLOCALS = 0
+```
+
+也就是说kotlin sam接口底层是通过使用java lambda表达式,关于java lambda表达式的具体实现,可以参考自[个人博客](https://juejin.cn/post/7126485060697456647)
