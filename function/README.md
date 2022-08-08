@@ -283,4 +283,214 @@ public final static main()V
     MAXLOCALS = 0
 ```
 
-也就是说kotlin sam接口底层是通过使用java lambda表达式,关于java lambda表达式的具体实现,可以参考自[个人博客](https://juejin.cn/post/7126485060697456647)
+也就是说kotlin sam接口底层是通过使用java lambda表达式,关于java
+lambda表达式的具体实现,可以参考自[个人博客](https://juejin.cn/post/7126485060697456647)
+
+# 函数默认参数
+
+函数默认参数是一个不错的特性(对于kotlin来说是,对java那就不好说了)
+
+```kotlin
+fun test(
+    a: Byte = 0,
+    b: Short,
+    c: Int = 1,
+    d: Long,
+    e: Float = 2f,
+    f: Double,
+    g: Boolean = false,
+) {
+}
+
+fun main() {
+    test(a = Byte.MAX_VALUE, b = 10, c = Int.MAX_VALUE, d = 11, e = Float.MAX_VALUE, f = 12.0, g = true)
+    test(b = 10, c = Int.MAX_VALUE, d = 11, e = Float.MAX_VALUE, f = 12.0, g = true)
+    test(b = 10, c = Int.MAX_VALUE, d = 11, e = Float.MAX_VALUE, f = 12.0)
+    test(b = 10, d = 11, f = 12.0)
+}
+```
+
+## 编译产物
+
+![img_4.png](img_4.png)
+
+## javap
+
+![img_5.png](img_5.png)
+
+很明显在原来的基础上生成了一个default method
+
+## 源代码分析
+
+```java
+
+public class DefaultArgument {
+
+    public static final void test(byte a, short b, int c, long d, float e, double f, boolean g) {
+    }
+
+    // $FF: synthetic method
+    public static void test$default(byte var0, short var1, int var2, long var3, float var5, double var6, boolean var8, int var9, Object var10) {
+        if ((var9 & 1) != 0) {
+            var0 = 0;
+        }
+
+        if ((var9 & 4) != 0) {
+            var2 = 1;
+        }
+
+        if ((var9 & 16) != 0) {
+            var5 = 2.0F;
+        }
+
+        if ((var9 & 64) != 0) {
+            var8 = false;
+        }
+
+        test(var0, var1, var2, var3, var5, var6, var8);
+    }
+
+    public static final void main() {
+        test((byte) 127, (short) 10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, true);
+        test$default((byte) 0, (short) 10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, true, 1, (Object) null);
+        test$default((byte) 0, (short) 10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, false, 65, (Object) null);
+        test$default((byte) 0, (short) 10, 0, 11L, 0.0F, 12.0, false, 85, (Object) null);
+    }
+
+}
+
+```
+
+- 我们定义函数没有做特殊处理
+- 生成了一个额外的default
+- 对于默认参数通过xx$default方法进行中转
+- 没有使用默认参数的调用直接调用函数本身
+
+所以默认参数的具体实现其实就是$default方法
+
+```java
+public class DefaultArgumentKt {
+
+    public static final void test(byte a, short b, int c, long d, float e, double f, boolean g) {
+    }
+
+    // $FF: synthetic method
+    //参数在原来的基础上多了两个: 一个int,一个Object
+    //这个Object不知道是干嘛的,不过也不重要,因为内部也没有用到它,猜测应该是用于做标记的(给编译器看告诉编译器这是个default method)
+    //int作为过来人告诉你这是用来标记默认参数的个数的(他这里是用的二进制做标记)
+    public static void test$default(byte var0, short var1, int var2, long var3, float var5, double var6, boolean var8, int var9, Object var10) {
+
+        //盲猜这里的一片调用是用来给默认参数赋值的
+        //因为后面就是直接调用的方法,只有可能是在这里进行的默认参数的处理
+
+        if ((var9 & 1) != 0) {
+            var0 = 0;
+        }
+
+        if ((var9 & 4) != 0) {
+            var2 = 1;
+        }
+
+        if ((var9 & 16) != 0) {
+            var5 = 2.0F;
+        }
+
+        if ((var9 & 64) != 0) {
+            var8 = false;
+        }
+
+        test(var0, var1, var2, var3, var5, var6, var8);
+    }
+
+    public static final void main() {
+        test((byte) 127, (short) 10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, true);
+        test$default((byte) 0, (short) 10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, true, 1, (Object) null);
+        test$default((byte) 0, (short) 10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, false, 65, (Object) null);
+        test$default((byte) 0, (short) 10, 0, 11L, 0.0F, 12.0, false, 85, (Object) null);
+    }
+
+}
+```
+
+梳理了大概我们再看看我们默认参数的定义
+
+```kotlin
+//我们这里的默认参数参数的位次分别是
+//1,3,5,7
+//数值分别是0,1,2f,false
+fun test(
+    a: Byte = 0,
+    b: Short,
+    c: Int = 1,
+    d: Long,
+    e: Float = 2f,
+    f: Double,
+    g: Boolean = false,
+) {
+}
+```
+
+转过头看看调用处
+
+```java
+public class DefaultArgumentKt {
+    public static void test$default(
+            byte var0,
+            short var1,
+            int var2,
+            long var3,
+            float var5,
+            double var6,
+            boolean var8,
+            int var9,
+            Object var10
+    ) {
+        //第1位默认值0
+        //1 == 2 ^ (1 - 1)
+        if ((var9 & 1) != 0) {
+            var0 = 0;
+        }
+        //第3位默认值1
+        //4 == 2 ^ (3 - 1)
+        if ((var9 & 4) != 0) {
+            var2 = 1;
+        }
+        //第5位默认值值2f
+        //16 == 2 ^ (5 - 1)
+        if ((var9 & 16) != 0) {
+            var5 = 2.0F;
+        }
+        //第7位默认值false
+        //64 == 2 ^ (7 - 1)
+        if ((var9 & 64) != 0) {
+            var8 = false;
+        }
+
+    }
+}
+
+
+```
+
+分析一下传递参数的位置的值的情况
+
+```
+//没有使用默认参数
+test((byte)127, (short)10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, true);
+//1 默认参数
+test$default((byte)0, (short)10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, true, 1, (Object)null);
+//1 7位默认参数 
+test$default((byte)0, (short)10, Integer.MAX_VALUE, 11L, Float.MAX_VALUE, 12.0, false, 65, (Object)null);
+//1 3 5 7位默认参数
+test$default((byte)0, (short)10, 0, 11L, 0.0F, 12.0, false, 85, (Object)null);
+```
+
+1 = 2<sup>(1 - 1)</sup>
+
+64 = 2<sup>(1 - 1)</sup>+2 <sup>(7 - 1)</sup>
+
+85 = 2<sup>(1 - 1)</sup> + 2<sup>(3 - 1)</sup> + 2<sup>(5 - 1)</sup> + 2<sup>(7 - 1)</sup>
+
+- 可以发现默认参数这里使用了一个二进制的int来存放我们每一位是否选择使用默认参数,如果对应二进制位的值为1表明使用默认值,0表明不使用
+- 使用默认值很简单就将参数赋值为对应的默认值
+- 不使用就不对参数值进行覆盖
