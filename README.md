@@ -1,14 +1,20 @@
-- [Kotlin 可空类型](inline)
+- [Kotlin 可空类型](nullable)
 - [Kotlin lateinit](lateinit)
 - [Kotlin 尾递归](tailrec)
 - [Kotlin 泛型](generics)
   - 函数泛型
   - 接口泛型
   - 类泛型
+  - in/out
+  - 泛型类型限定
+  - reified
 - [Kotlin 函数](function)
   - 高阶函数
   - SAM接口
+  - 函数默认参数
 - [Kotlin 内联](inline)
+  - inline fun
+  - value class
 - [Kotlin ::操作符](callable-reference-operator)
   - 函数引用
     - 顶层函数
